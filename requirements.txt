@@ -3,4 +3,6 @@ requests
 pandas
 plotly
 scikit-learn
+scipy
+kagglehub
 python-dotenv

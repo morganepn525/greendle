@@ -7,9 +7,28 @@ API_KEY = os.getenv("SPOONACULAR_KEY")
 BASE_URL = "https://api.spoonacular.com/recipes"
 
 
+class APIKeyMissingError(Exception):
+    pass
+
+class APIError(Exception):
+    pass
+
+
+def _check_response(response: requests.Response) -> dict:
+    if response.status_code == 401:
+        raise APIKeyMissingError(
+            "Spoonacular API key is missing or invalid. "
+            "Add SPOONACULAR_KEY=your_key to your .env file."
+        )
+    if response.status_code == 402:
+        raise APIError("Daily API quota exceeded. Try again tomorrow.")
+    if not response.ok:
+        raise APIError(f"API error {response.status_code}: {response.text[:200]}")
+    return response.json()
+
+
 def search_by_ingredients(ingredients: list[str], number: int = 8,
                           diet: str = None, intolerances: list[str] = None) -> list[dict]:
-    """Search recipes that use the given ingredients, optionally filtered by diet."""
     url = f"{BASE_URL}/complexSearch"
     params = {
         "includeIngredients": ",".join(ingredients),
@@ -24,20 +43,16 @@ def search_by_ingredients(ingredients: list[str], number: int = 8,
     if intolerances:
         params["intolerances"] = ",".join(intolerances)
 
-    response = requests.get(url, params=params)
-    results = response.json().get("results", [])
-
+    data = _check_response(requests.get(url, params=params))
+    results = data.get("results", [])
     for r in results:
         r["ingredients"] = [i["name"] for i in r.get("extendedIngredients", [])]
     return results
 
 
 def get_recipe_by_id(recipe_id: int) -> dict | None:
-    """Return full recipe details for a given Spoonacular recipe ID."""
     url = f"{BASE_URL}/{recipe_id}/information"
-    params = {"apiKey": API_KEY}
-    response = requests.get(url, params=params)
-    data = response.json()
+    data = _check_response(requests.get(url, params={"apiKey": API_KEY}))
     if "id" not in data:
         return None
     data["ingredients"] = [i["name"] for i in data.get("extendedIngredients", [])]
