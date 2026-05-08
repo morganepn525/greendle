@@ -24,8 +24,13 @@ The lightningxyz NOVA dataset is used as a secondary exact-match lookup.
 import os
 import re
 import pandas as pd
-import kagglehub
 import streamlit as st
+
+try:
+    import kagglehub
+    _KAGGLE_AVAILABLE = True
+except ImportError:
+    _KAGGLE_AVAILABLE = False
 
 # ── FDA Daily Values (per day) ───────────────────────────────────────────────
 _DV_FAT      = 78.0    # g
@@ -376,36 +381,44 @@ _SKIP_UNITS = {"serving", "servings"}
 
 @st.cache_data(show_spinner=False)
 def load_nutrition_db():
-    """Merge all 5 ingredient-nutrition CSVs (utsavdey1410 dataset)."""
-    path = kagglehub.dataset_download("utsavdey1410/food-nutrition-dataset")
-    folder = os.path.join(path, "FINAL FOOD DATASET")
-    dfs = []
-    for fname in [
-        "FOOD-DATA-GROUP1.csv", "FOOD-DATA-GROUP2.csv", "FOOD-DATA-GROUP3.csv",
-        "FOOD-DATA-GROUP4.csv", "FOOD-DATA-GROUP5.csv",
-    ]:
-        fp = os.path.join(folder, fname)
-        if os.path.exists(fp):
-            dfs.append(pd.read_csv(fp))
-    if not dfs:
+    if not _KAGGLE_AVAILABLE:
         return pd.DataFrame()
-    df = pd.concat(dfs, ignore_index=True)
-    df["food_lower"] = df["food"].str.lower().str.strip()
-    return df
+    try:
+        path = kagglehub.dataset_download("utsavdey1410/food-nutrition-dataset")
+        folder = os.path.join(path, "FINAL FOOD DATASET")
+        dfs = []
+        for fname in [
+            "FOOD-DATA-GROUP1.csv", "FOOD-DATA-GROUP2.csv", "FOOD-DATA-GROUP3.csv",
+            "FOOD-DATA-GROUP4.csv", "FOOD-DATA-GROUP5.csv",
+        ]:
+            fp = os.path.join(folder, fname)
+            if os.path.exists(fp):
+                dfs.append(pd.read_csv(fp))
+        if not dfs:
+            return pd.DataFrame()
+        df = pd.concat(dfs, ignore_index=True)
+        df["food_lower"] = df["food"].str.lower().str.strip()
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 
 @st.cache_data(show_spinner=False)
 def load_nova_db():
-    """Load the lightningxyz NOVA dataset for exact-product lookups."""
-    path = kagglehub.dataset_download("lightningxyz/international-food-nutrition-index-dataset")
-    fp = os.path.join(path, "nutri_scan_final.csv")
-    if not os.path.exists(fp):
+    if not _KAGGLE_AVAILABLE:
         return pd.DataFrame()
-    df = pd.read_csv(fp, usecols=["Product_Name", "NOVA_Group"])
-    df = df.dropna(subset=["NOVA_Group"])
-    df["product_lower"] = df["Product_Name"].str.lower().str.strip()
-    df["nova_int"] = df["NOVA_Group"].astype(int)
-    return df
+    try:
+        path = kagglehub.dataset_download("lightningxyz/international-food-nutrition-index-dataset")
+        fp = os.path.join(path, "nutri_scan_final.csv")
+        if not os.path.exists(fp):
+            return pd.DataFrame()
+        df = pd.read_csv(fp, usecols=["Product_Name", "NOVA_Group"])
+        df = df.dropna(subset=["NOVA_Group"])
+        df["product_lower"] = df["Product_Name"].str.lower().str.strip()
+        df["nova_int"] = df["NOVA_Group"].astype(int)
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 
 # ── NOVA classification ──────────────────────────────────────────────────────
