@@ -11,22 +11,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-def rank_recipes(recipes: list[dict], user_ingredients: list[str], ratings: dict) -> list[dict]:
-    """
-    Score and rank recipes by ingredient match and past user ratings.
-
-    Parameters:
-        recipes          — list of recipe dicts from the Spoonacular API
-        user_ingredients — ingredients the user entered on the search page
-        ratings          — dict of {recipe_id: star_rating (1-5)} from previous sessions
-
-    Returns the same list of recipes sorted from best to worst match.
-
-    Scoring formula (per recipe):
-        final_score = cosine_similarity * 0.7 + rating_boost * 0.3
-    This means ingredient match is the main driver (70%), but the user's
-    personal preferences (30%) influence the result over time.
-    """
+# Score and rank recipes by ingredient match and past user ratings.
+# Parameters:
+#   recipes          — list of recipe dicts from the Spoonacular API
+#   user_ingredients — ingredients the user entered on the search page
+#   ratings          — dict of {recipe_id: star_rating (1-5)} from previous sessions
+# Returns the same list of recipes sorted from best to worst match.
+# Scoring formula: final_score = cosine_similarity * 0.7 + rating_boost * 0.3
+# Ingredient match is the main driver (70%), user's personal preferences influence the result (30%).
+def rank_recipes(recipes, user_ingredients, ratings):
     if not recipes:
         return []
 

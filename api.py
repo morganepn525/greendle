@@ -46,8 +46,8 @@ def _check_response(response):
         raise APIError("Daily API quota exceeded. Try again tomorrow.")
 
     # If something else went wrong, we show a general error message
-    if response.ok == False:
-        raise APIError("API error " + str(response.status_code) + ": " + response.text[:200])
+    if not response.ok:
+        raise APIError(f"API error {response.status_code}: {response.text[:200]}")
 
     # If everything is fine, we return the data as a dictionary
     return response.json()
@@ -59,7 +59,7 @@ def _check_response(response):
 
 def search_by_ingredients(ingredients, number=8, diet=None, intolerances=None):
     # This is the exact address for the search
-    url = BASE_URL + "/complexSearch"
+    url = f"{BASE_URL}/complexSearch"
 
     # These are all the options we send to the API
     params = {
@@ -72,11 +72,11 @@ def search_by_ingredients(ingredients, number=8, diet=None, intolerances=None):
     }
 
     # If the user wants to filter by diet (like "vegan"), we add that option
-    if diet != None:
+    if diet is not None:
         params["diet"] = diet
 
     # If the user has food intolerances (like "gluten"), we add those too
-    if intolerances != None:
+    if intolerances is not None:
         params["intolerances"] = ",".join(intolerances)
 
     # We send the request to the API and check if the response is okay
@@ -88,10 +88,7 @@ def search_by_ingredients(ingredients, number=8, diet=None, intolerances=None):
     # For each recipe, we create a simple list with only the ingredient names
     # This makes it easier to work with later
     for r in results:
-        ingredient_names = []
-        for i in r.get("extendedIngredients", []):
-            ingredient_names.append(i["name"])
-        r["ingredients"] = ingredient_names
+        r["ingredients"] = [i["name"] for i in r.get("extendedIngredients", [])]
 
     # We return the full list of recipes
     return results
@@ -103,7 +100,7 @@ def search_by_ingredients(ingredients, number=8, diet=None, intolerances=None):
 
 def get_recipe_by_id(recipe_id):
     # This is the address for one specific recipe
-    url = BASE_URL + "/" + str(recipe_id) + "/information"
+    url = f"{BASE_URL}/{recipe_id}/information"
 
     # We send the request and check if the response is okay
     data = _check_response(requests.get(url, params={"apiKey": API_KEY}))
@@ -113,11 +110,7 @@ def get_recipe_by_id(recipe_id):
         return None
 
     # We create a simple list with only the ingredient names
-    ingredient_names = []
-    for i in data.get("extendedIngredients", []):
-        ingredient_names.append(i["name"])
-
-    data["ingredients"] = ingredient_names
+    data["ingredients"] = [i["name"] for i in data.get("extendedIngredients", [])]
 
     # We return the recipe with all its details
     return data

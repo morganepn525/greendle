@@ -26,8 +26,8 @@ CACHE_FILE   = os.path.join(os.path.dirname(__file__), "data", "recipe_cache.jso
 PROFILE_FILE = os.path.join(os.path.dirname(__file__), "data", "profile.json")
 
 
+# Load a JSON file and return its contents, or an empty dict if missing/corrupt.
 def load_json(path):
-    """Load a JSON file and return its contents, or an empty dict if missing/corrupt."""
     try:
         with open(path) as f:
             return json.load(f)
@@ -35,8 +35,8 @@ def load_json(path):
         return {}
 
 
+# Serialise data to a JSON file, overwriting any existing content.
 def save_json(path, data):
-    """Serialise data to a JSON file, overwriting any existing content."""
     with open(path, "w") as f:
         json.dump(data, f)
 
@@ -151,8 +151,8 @@ page = st.sidebar.radio(
 
 # ── Reusable UI helpers ────────────────────────────────────────────────────────
 
+# Render a styled section heading with a green underline accent.
 def section_heading(title):
-    """Render a styled section heading with a green underline accent."""
     st.markdown(f"""
     <div style="margin-bottom: 1.5rem;">
         <h2 style="font-family:'Playfair Display',serif; font-style:italic; font-weight:600;
@@ -162,8 +162,8 @@ def section_heading(title):
     """, unsafe_allow_html=True)
 
 
+# Wrap arbitrary HTML in a white rounded card with a subtle shadow.
 def card(content_html):
-    """Wrap arbitrary HTML in a white rounded card with a subtle shadow."""
     st.markdown(f"""
     <div style="background:white; border-radius:14px; padding:1.6rem;
                 box-shadow:0 2px 12px rgba(58,107,58,0.08); margin-bottom:1rem;

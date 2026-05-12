@@ -1,25 +1,23 @@
-"""
-Greendle Health Score (0–100)
-  = Nutri component (0–60 pts, 60% weight)
-  + NOVA component  (10–40 pts, based on ingredient processing level)
-
-Nutri component
-  Scores 7 nutrients per serving against FDA Daily Values:
-  calories, total fat, saturated fat, sugar, sodium, protein, carbohydrates.
-  Negative nutrients lower the score; protein raises it.
-
-NOVA component
-  Classifies each ingredient with the NOVA processing scale (1–4) and
-  computes a gram-weighted average penalty:
-    NOVA 1 (unprocessed)       →  0 pts penalty
-    NOVA 2 (culinary ingred.)  →  5 pts penalty
-    NOVA 3 (processed)         → 15 pts penalty
-    NOVA 4 (ultra-processed)   → 30 pts penalty
-  NOVA component = 40 – weighted_average_penalty  (range 10–40)
-
-Primary NOVA classification uses curated keyword sets.
-The lightningxyz NOVA dataset is used as a secondary exact-match lookup.
-"""
+# Greendle Health Score (0–100)
+#   = Nutri component (0–60 pts, 60% weight)
+#   + NOVA component  (10–40 pts, based on ingredient processing level)
+#
+# Nutri component
+#   Scores 7 nutrients per serving against FDA Daily Values:
+#   calories, total fat, saturated fat, sugar, sodium, protein, carbohydrates.
+#   Negative nutrients lower the score; protein raises it.
+#
+# NOVA component
+#   Classifies each ingredient with the NOVA processing scale (1–4) and
+#   computes a gram-weighted average penalty:
+#     NOVA 1 (unprocessed)       →  0 pts penalty
+#     NOVA 2 (culinary ingred.)  →  5 pts penalty
+#     NOVA 3 (processed)         → 15 pts penalty
+#     NOVA 4 (ultra-processed)   → 30 pts penalty
+#   NOVA component = 40 – weighted_average_penalty  (range 10–40)
+#
+# Primary NOVA classification uses curated keyword sets.
+# The lightningxyz NOVA dataset is used as a secondary exact-match lookup.
 
 import os
 import re
@@ -308,18 +306,14 @@ INGREDIENT_PENALTIES = {
 }
 
 
-def apply_keyword_penalties(recipe_name: str, ingredients: list) -> dict:
-    """
-    Scan recipe name and ingredient list against cooking-method and
-    ingredient keyword sets. Returns NOVA level, total penalty (capped
-    at 40), and the matched keywords for debugging.
-
-    Penalty scale → nova_0_100 = max(0, 100 − penalty × 2.5)
-      penalty =  0  → 100  (perfect)
-      penalty = 25  →  37.5 (deep fried)
-      penalty = 40  →   0  (worst)
-    Negative penalties (bonuses) are capped so nova_0_100 ≤ 100.
-    """
+# Scan recipe name and ingredients against cooking-method and ingredient keyword sets.
+# Returns NOVA level, total penalty (capped at 40), and matched keywords.
+# Penalty scale → nova_0_100 = max(0, 100 − penalty × 2.5)
+#   penalty =  0  → 100  (perfect)
+#   penalty = 25  →  37.5 (deep fried)
+#   penalty = 40  →   0  (worst)
+# Negative penalties (bonuses) are capped so nova_0_100 ≤ 100.
+def apply_keyword_penalties(recipe_name, ingredients):
     text = (recipe_name + " " + " ".join(ingredients)).lower()
 
     total_penalty    = 0
@@ -423,16 +417,9 @@ def load_nova_db():
 
 # ── NOVA classification ──────────────────────────────────────────────────────
 
+# Return NOVA group (1–4) for an ingredient name.
+# Priority: phrase match → token match → dataset lookup → default NOVA 2.
 def _classify_nova(name, nova_df=None):
-    """
-    Return NOVA group (1–4) for an ingredient name.
-
-    Priority:
-    1. Multi-word phrase lookup (most specific)
-    2. Single-token keyword sets
-    3. Exact product-name match in the nova_df dataset
-    4. Default: NOVA 2 (generic cooking ingredient)
-    """
     n = name.lower().strip()
     n_clean = re.sub(r"[^a-z0-9 ]", " ", n)
 
@@ -469,8 +456,8 @@ def _classify_nova(name, nova_df=None):
 
 # ── Ingredient helpers ───────────────────────────────────────────────────────
 
+# Convert an ingredient's measured amount to grams. Skips 'servings' unit.
 def _ingredient_grams(ing):
-    """Convert an ingredient's measured amount to grams. Skips 'servings' unit."""
     metric   = ing.get("measures", {}).get("metric", {})
     m_unit   = (metric.get("unitShort") or metric.get("unitLong") or "").lower().strip()
     m_amount = float(metric.get("amount") or 0)
@@ -492,8 +479,8 @@ def _ingredient_grams(ing):
     return _DEFAULT_GRAMS
 
 
+# Return the best-matching nutrition-DB row for an ingredient name.
 def _match_ingredient(name, db):
-    """Return the best-matching nutrition-DB row for an ingredient name."""
     if db.empty or not name:
         return None
     n = name.lower().strip()
@@ -528,14 +515,10 @@ def _match_ingredient(name, db):
 
 # ── Scoring ──────────────────────────────────────────────────────────────────
 
+# Compute a 0–100 nutritional score from whole-recipe gram totals.
+# Each nutrient is a fraction of its FDA Daily Value per serving; protein is the only positive factor.
 def _nutri_score_0_100(calories, fat_g, sat_fat_g, sugar_g, sodium_g,
                         protein_g, carbs_g, servings):
-    """
-    Compute a 0–100 nutritional score from whole-recipe gram totals.
-    Each nutrient is expressed as a fraction of its FDA Daily Value per serving,
-    then combined with weights that sum to 1.0.
-    Bad nutrients (high = worse); protein is the only positive factor.
-    """
     n = max(1, servings)
 
     def frac(val, dv):
@@ -562,21 +545,12 @@ def _nutri_score_0_100(calories, fat_g, sat_fat_g, sugar_g, sodium_g,
     return max(0.0, min(100.0, score))
 
 
+# Compute the Greendle Health Score for a recipe.
+# Returns (letter, score) where letter is A–E and score is 1.0–10.0.
+# Formula: greendle_raw = nutri_0_100 × 0.60 + nova_0_100 × 0.40
+#   score_1_10 = 1 + (greendle_raw / 100) × 9  → rounded to 1 dp
+#   nova_0_100 = 100 × (1 – avg_penalty / 30)  where avg_penalty is gram-weighted across all ingredients (0–30).
 def recipe_nutriscore(recipe, nutrition_db, nova_db=None):
-    """
-    Compute the Greendle Health Score for a recipe.
-
-    Returns (letter, score) where:
-      letter ∈ {A–E}
-      score  ∈ [1.0, 10.0]  (one decimal place)
-
-    Formula:
-      greendle_raw = nutri_0_100 × 0.60 + nova_0_100 × 0.40
-      score_1_10   = 1 + (greendle_raw / 100) × 9   → rounded to 1 dp
-
-    nova_0_100 = 100 × (1 – avg_penalty / 30)
-      where avg_penalty is gram-weighted across all ingredients (0–30).
-    """
     ingredients = recipe.get("extendedIngredients", [])
     servings    = max(1, recipe.get("servings", 1))
 

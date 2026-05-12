@@ -1,20 +1,17 @@
-"""
-Collaborative-filtering recommender backed by the Food.com Kaggle dataset.
-
-Dataset: shuyangli94/food-com-recipes-and-user-interactions
-  RAW_recipes.csv      – recipe metadata (id, name, ingredients, …)
-  RAW_interactions.csv – user ratings   (user_id, recipe_id, rating)
-
-How it works
-------------
-1. Build a user × recipe sparse rating matrix from the interactions file.
-2. Apply TruncatedSVD (50 latent factors) on the transposed matrix so each
-   recipe gets a dense latent-factor vector.
-3. At recommendation time, match the user's rated Spoonacular recipe titles
-   against Food.com names via TF-IDF character-ngram similarity.
-4. Average the latent vectors of the matched recipes (weighted by star rating)
-   into a single "taste profile" vector and return the nearest neighbours.
-"""
+# Collaborative-filtering recommender backed by the Food.com Kaggle dataset.
+#
+# Dataset: shuyangli94/food-com-recipes-and-user-interactions
+#   RAW_recipes.csv      – recipe metadata (id, name, ingredients, …)
+#   RAW_interactions.csv – user ratings   (user_id, recipe_id, rating)
+#
+# How it works:
+# 1. Build a user × recipe sparse rating matrix from the interactions file.
+# 2. Apply TruncatedSVD (50 latent factors) on the transposed matrix so each
+#    recipe gets a dense latent-factor vector.
+# 3. At recommendation time, match the user's rated Spoonacular recipe titles
+#    against Food.com names via TF-IDF character-ngram similarity.
+# 4. Average the latent vectors of the matched recipes (weighted by star rating)
+#    into a single "taste profile" vector and return the nearest neighbours.
 
 import ast
 import os
@@ -40,15 +37,15 @@ _NAME_TFIDF_FEATS   = 30_000
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
-def _parse_ingredients(raw: str) -> str:
+def _parse_ingredients(raw):
     try:
         return ", ".join(ast.literal_eval(raw))
     except Exception:
         return str(raw)
 
 
-def _find_dataset_path() -> str | None:
-    """Return path to the Food.com dataset folder, or None if not found."""
+# Return path to the Food.com dataset folder, or None if not found.
+def _find_dataset_path():
     # 1. Explicit env override
     env = os.getenv("CF_DATASET_PATH", "").strip()
     if env and os.path.isdir(env):
@@ -83,8 +80,8 @@ def _find_dataset_path() -> str | None:
 
 # ── model building ─────────────────────────────────────────────────────────
 
-def _build_model(dataset_path: str) -> dict:
-    """Read CSVs, build SVD latent factors, pickle result, return model dict."""
+# Read CSVs, build SVD latent factors, pickle result, return model dict.
+def _build_model(dataset_path):
     inter = pd.read_csv(
         os.path.join(dataset_path, "RAW_interactions.csv"),
         usecols=["user_id", "recipe_id", "rating"],
@@ -149,15 +146,13 @@ def _build_model(dataset_path: str) -> dict:
 
 # ── public API ─────────────────────────────────────────────────────────────
 
-def model_pickle_exists() -> bool:
+def model_pickle_exists():
     return os.path.exists(_MODEL_PATH)
 
 
-def load_cf_model() -> dict | None:
-    """
-    Load the cached model from disk, or build it from the Kaggle dataset.
-    Returns None if the dataset cannot be found.
-    """
+# Load the cached model from disk, or build it from the Kaggle dataset.
+# Returns None if the dataset cannot be found.
+def load_cf_model():
     if os.path.exists(_MODEL_PATH):
         with open(_MODEL_PATH, "rb") as f:
             return pickle.load(f)
@@ -169,21 +164,11 @@ def load_cf_model() -> dict | None:
     return _build_model(dataset_path)
 
 
-def get_cf_recommendations(
-    rated_recipes: dict,   # {spoonacular_title: star_rating (1-5)}
-    model: dict,
-    n: int = 6,
-) -> list[dict]:
-    """
-    Return up to *n* Food.com recipe dicts with keys 'name' and 'ingredients'.
-
-    Algorithm
-    ---------
-    For every rated title, find the best-matching Food.com recipe via TF-IDF
-    character-ngram similarity.  Weight each recipe's SVD latent vector by
-    the normalised star rating (1-5 → 0.1-1.0) and average into a taste-
-    profile vector.  Return the nearest neighbours in latent space.
-    """
+# Return up to n Food.com recipe dicts with keys 'name' and 'ingredients'.
+# For every rated title, find the best-matching Food.com recipe via TF-IDF character-ngram similarity.
+# Weight each recipe's SVD latent vector by the normalised star rating (1-5 → 0.1-1.0)
+# and average into a taste-profile vector. Return the nearest neighbours in latent space.
+def get_cf_recommendations(rated_recipes, model, n=6):
     if not rated_recipes or model is None:
         return []
 
