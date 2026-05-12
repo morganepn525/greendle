@@ -173,6 +173,20 @@ def card(content_html):
     """, unsafe_allow_html=True)
 
 
+_NON_HALAL_KEYWORDS = {
+    "pork", "bacon", "ham", "lard", "prosciutto", "pancetta", "chorizo",
+    "salami", "pepperoni", "wine", "beer", "ale", "rum", "vodka",
+    "whiskey", "whisky", "brandy", "liqueur", "sake", "champagne",
+    "gin", "tequila", "bourbon", "alcohol", "spirits",
+}
+
+def non_halal_label(recipe):
+    names = [i.get("name", "").lower() for i in recipe.get("extendedIngredients", [])]
+    if any(kw in name for name in names for kw in _NON_HALAL_KEYWORDS):
+        return "<span style='color:#DC2626; font-size:0.85rem;'>🚫 Non-halal</span>"
+    return ""
+
+
 # ── Page: Home ─────────────────────────────────────────────────────────────────
 if page == "Home":
     # Hero title
@@ -184,13 +198,6 @@ if page == "Home":
                     color:#4A6741; line-height:1;">.</span>
     </div>
     """, unsafe_allow_html=True)
-
-    # Call-to-action button that navigates directly to the search page
-    _, btn_col, _ = st.columns([2, 1, 2])
-    with btn_col:
-        if st.button("Start here →", use_container_width=True):
-            st.session_state["_nav_target"] = "Find Recipes"
-            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -352,14 +359,6 @@ elif page == "Find Recipes":
         "Ingredients (comma-separated)",
         placeholder="e.g. chicken, garlic, lemon"
     )
-    # Time limit is captured for future filtering; not yet passed to the API
-    time_limit = st.select_slider(
-        "Available cooking time",
-        options=[15, 30, 45, 60],
-        value=30,
-        format_func=lambda x: f"{x} min"
-    )
-
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("Search Recipes"):
         if not ingredients_input:
@@ -419,12 +418,23 @@ elif page == "Find Recipes":
                     st.session_state["recipe_cache"] = recipe_cache
                     save_json(CACHE_FILE, recipe_cache)  # persist to disk
 
+                if st.session_state.get("profile", {}).get("halal"):
+                    full_recipes = [r for r in full_recipes if not non_halal_label(r)]
+
                 st.session_state["search_results"] = full_recipes
                 st.session_state["search_ingredients"] = ingredients
 
     # Display results — persisted in session_state so they survive re-renders
     if "search_results" in st.session_state:
         results = st.session_state["search_results"]
+
+        def has_instructions(r):
+            if (r.get("instructions") or "").strip():
+                return True
+            analyzed = r.get("analyzedInstructions", [])
+            return any(s for section in analyzed for s in section.get("steps", []))
+
+        results = [r for r in results if has_instructions(r)]
         st.markdown(f"<p style='color:#3A6B3A; font-weight:600; margin-bottom:1rem;'>Found {len(results)} recipes</p>", unsafe_allow_html=True)
 
         for recipe in results:
@@ -441,6 +451,9 @@ elif page == "Find Recipes":
                 diets = recipe.get("diets", [])
                 if diets:
                     st.markdown(f"<span style='color:#3A6B3A; font-size:0.85rem;'>🥗 {', '.join(d.capitalize() for d in diets[:3])}</span>", unsafe_allow_html=True)
+                label = non_halal_label(recipe)
+                if label:
+                    st.markdown(label, unsafe_allow_html=True)
 
             # Full recipe details in a collapsible expander
             with st.expander("View full recipe"):
@@ -449,15 +462,11 @@ elif page == "Find Recipes":
                     st.markdown(f"- {ing.get('original', '')}")
 
                 st.markdown("**Instructions**")
-                # Try plain-text instructions first; fall back to structured step list
-                instructions = recipe.get("instructions", "").strip()
+                instructions = (recipe.get("instructions") or "").strip()
                 if not instructions:
                     analyzed = recipe.get("analyzedInstructions", [])
                     steps = [s for section in analyzed for s in section.get("steps", [])]
-                    if steps:
-                        instructions = "\n\n".join(f"**{s['number']}.** {s['step']}" for s in steps)
-                    else:
-                        instructions = "No instructions available for this recipe."
+                    instructions = "\n\n".join(f"**{s['number']}.** {s['step']}" for s in steps)
                 st.markdown(instructions, unsafe_allow_html=True)
 
                 st.markdown("---")
@@ -475,7 +484,7 @@ elif page == "Find Recipes":
 # ── Page: My Dashboard ─────────────────────────────────────────────────────────
 elif page == "My Dashboard":
     section_heading("My Health Dashboard")
-    st.markdown("<p style='color:#6B7280; margin-top:-1rem; margin-bottom:1.5rem;'>See how nutritious your cooked meals are, scored with the Greendle Health Score algorithm.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#6B7280; margin-top:-1rem; margin-bottom:1.5rem;'>The Greendle Score cuts through diet culture : it's a rating out of 10 that tells you what your body actually thrives on, not what shrinks your waistline. By combining the nutritional quality of your ingredients with how processed they are, it gives you a honest picture of how well a meal truly fuels, repairs, and energizes your body from the inside out.</p>", unsafe_allow_html=True)
 
     ratings      = st.session_state.get("ratings", {})
     results      = st.session_state.get("search_results", [])
@@ -596,6 +605,8 @@ elif page == "For You":
                                 recipe_cache[ckey] = fetched if fetched else r
                                 save_json(CACHE_FILE, recipe_cache)
                             full.append(recipe_cache[ckey])
+                    if st.session_state.get("profile", {}).get("halal"):
+                        full = [r for r in full if not non_halal_label(r)]
                     st.session_state["_recs"]     = full
                     st.session_state["_recs_key"] = ratings_key
 
@@ -625,6 +636,9 @@ elif page == "For You":
                     diets = recipe.get("diets", [])
                     if diets:
                         st.markdown(f"<span style='color:#89cd8f;font-size:0.85rem;'>🥗 {', '.join(d.capitalize() for d in diets[:3])}</span>", unsafe_allow_html=True)
+                    label = non_halal_label(recipe)
+                    if label:
+                        st.markdown(label, unsafe_allow_html=True)
                 st.markdown("<hr style='border:none;border-top:1px solid #E5E7EB;margin:0.5rem 0;'>", unsafe_allow_html=True)
 
             # Algorithm explainer shown at the bottom for transparency
