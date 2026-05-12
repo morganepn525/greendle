@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 # This loads our secret API key from a file called .env
 # We do this so the key is not visible in our code
 load_dotenv()
-my_api_key = os.getenv("SPOONACULAR_KEY")
+API_KEY = os.getenv("SPOONACULAR_KEY")
 
 # This is the main address of the Spoonacular API
 # All our requests will start with this address
-website_address = "https://api.spoonacular.com/recipes"
+BASE_URL = "https://api.spoonacular.com/recipes"
 
 
 # --- Custom Error Messages ---
@@ -33,7 +33,7 @@ class APIError(Exception):
 # This function checks if the API response is okay.
 # We use it in every request so we don't have to repeat the same checks.
 
-def check_response(response):
+def _check_response(response):
     # If the status code is 401, the API key is wrong or missing
     if response.status_code == 401:
         raise APIKeyMissingError(
@@ -55,71 +55,69 @@ def check_response(response):
 
 # --- Search Function ---
 # This function searches for recipes based on ingredients the user has at home.
-# For example: ingredients_list = ["tomato", "cheese", "egg"]
+# For example: ingredients = ["tomato", "cheese", "egg"]
 
-def search_recipes_with_ingredients(ingredients_list, number_of_recipes=8, diet=None, intolerances=None):
+def search_by_ingredients(ingredients, number=8, diet=None, intolerances=None):
     # This is the exact address for the search
-    search_address = website_address + "/complexSearch"
+    url = BASE_URL + "/complexSearch"
 
     # These are all the options we send to the API
-    options = {
-        "includeIngredients": ",".join(ingredients_list),  # turns ["a", "b"] into "a,b"
-        "number": number_of_recipes,                        # how many recipes we want back
-        "apiKey": my_api_key,                               # our secret key
-        "addRecipeInformation": True,                       # we want extra recipe details
-        "fillIngredients": True,                            # we want the full ingredient list
-        "sort": "max-used-ingredients",                     # show recipes that use the most of our ingredients first
+    params = {
+        "includeIngredients": ",".join(ingredients),  # turns ["a", "b"] into "a,b"
+        "number": number,                              # how many recipes we want back
+        "apiKey": API_KEY,                             # our secret key
+        "addRecipeInformation": True,                  # we want extra recipe details
+        "fillIngredients": True,                       # we want the full ingredient list
+        "sort": "max-used-ingredients",                # show recipes that use the most of our ingredients first
     }
 
     # If the user wants to filter by diet (like "vegan"), we add that option
     if diet != None:
-        options["diet"] = diet
+        params["diet"] = diet
 
     # If the user has food intolerances (like "gluten"), we add those too
     if intolerances != None:
-        options["intolerances"] = ",".join(intolerances)
+        params["intolerances"] = ",".join(intolerances)
 
     # We send the request to the API and check if the response is okay
-    response = requests.get(search_address, params=options)
-    data = check_response(response)
+    data = _check_response(requests.get(url, params=params))
 
     # We get the list of recipes from the response
-    all_recipes = data.get("results", [])
+    results = data.get("results", [])
 
     # For each recipe, we create a simple list with only the ingredient names
     # This makes it easier to work with later
-    for one_recipe in all_recipes:
+    for r in results:
         ingredient_names = []
-        for ingredient in one_recipe.get("extendedIngredients", []):
-            ingredient_names.append(ingredient["name"])
-        one_recipe["ingredients"] = ingredient_names
+        for i in r.get("extendedIngredients", []):
+            ingredient_names.append(i["name"])
+        r["ingredients"] = ingredient_names
 
     # We return the full list of recipes
-    return all_recipes
+    return results
 
 
 # --- Get Single Recipe Function ---
 # This function gets all the details for one specific recipe.
 # We need the recipe ID number to find it (every recipe has a unique ID).
 
-def get_recipe_with_id(recipe_id):
+def get_recipe_by_id(recipe_id):
     # This is the address for one specific recipe
-    recipe_address = website_address + "/" + str(recipe_id) + "/information"
+    url = BASE_URL + "/" + str(recipe_id) + "/information"
 
     # We send the request and check if the response is okay
-    response = requests.get(recipe_address, params={"apiKey": my_api_key})
-    recipe_data = check_response(response)
+    data = _check_response(requests.get(url, params={"apiKey": API_KEY}))
 
     # If the response does not contain an "id", the recipe was not found
-    if "id" not in recipe_data:
+    if "id" not in data:
         return None
 
     # We create a simple list with only the ingredient names
     ingredient_names = []
-    for ingredient in recipe_data.get("extendedIngredients", []):
-        ingredient_names.append(ingredient["name"])
+    for i in data.get("extendedIngredients", []):
+        ingredient_names.append(i["name"])
 
-    recipe_data["ingredients"] = ingredient_names
+    data["ingredients"] = ingredient_names
 
     # We return the recipe with all its details
-    return recipe_data
+    return data
