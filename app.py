@@ -11,49 +11,55 @@
 #   My Dashboard — health score visualisation for cooked meals
 #   For You      — personalised recommendations driven by past ratings
 
-import json
-import os
-import streamlit as st
-import plotly.graph_objects as go
-from api import search_by_ingredients, get_recipe_by_id, APIKeyMissingError, APIError
-from recommender import rank_recipes
-from nutriscore import load_nutrition_db, load_nova_db, recipe_nutriscore, LETTER_COLOR, LETTER_LABEL
+#Imports:
+import json # let us save Python data into text files and read it back later.
+import os # build file paths in a way that works on Windows, Mac and Linux.
+import streamlit as st # "as st" gives streamlit the nickname st, so we can write st.button(...) instead of streamlit.button(...)
+import plotly.graph_objects as go # same: go = plotly.graph_objects, used to draw the bar chart on the dashboard.
 
-# ── File paths for persistent storage ─────────────────────────────────────────
+# Internal project modules:
+from api import search_by_ingredients, get_recipe_by_id, APIKeyMissingError, APIError # We borrow the two search functions and two error types so we can show a nice message instead of a crash when something goes wrong.
+from recommender import rank_recipes
+from nutriscore import load_nutrition_db, load_nova_db, recipe_nutriscore, LETTER_COLOR, LETTER_LABEL # We use it on the dashboard to show a score from A to E.
+
+# ── File paths for persistent storage───────────────────────────────────────────────
 # Data is stored as JSON files so it survives browser refreshes and app restarts.
+# os.path.dirname(__file__) returns the folder this app.py lives in, so paths work no matter where the app is launched from.
 RATINGS_FILE = os.path.join(os.path.dirname(__file__), "data", "ratings.json")
 CACHE_FILE   = os.path.join(os.path.dirname(__file__), "data", "recipe_cache.json")
 PROFILE_FILE = os.path.join(os.path.dirname(__file__), "data", "profile.json")
 
-
-# Load a JSON file and return its contents, or an empty dict if missing/corrupt.
+# Two small reusable functions for reading and writing JSON files.
+# Used everywhere we save/load ratings, profile, and the recipe cache.
 def load_json(path):
+    """Load a JSON file and return its contents, or an empty dict if missing/corrupt."""
     try:
         with open(path) as f:
-            return json.load(f)
+            return json.load(f)  # json.load reads the text and converts it back into a Python dict.
     except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+        return {} # Return an empty dict so the app can keep running as if no data was saved.
 
 
-# Serialise data to a JSON file, overwriting any existing content.
 def save_json(path, data):
-    with open(path, "w") as f:
-        json.dump(data, f)
+    """Serialise data to a JSON file, overwriting any existing content."""
+    with open(path, "w") as f: # "w" = write mode. This also erases the file's previous content, which is fine because we always overwrite with the latest version.
+        json.dump(data, f)  # json.dump does the opposite of json.load: dict → JSON text in the file
 
 
 # ── Session state initialisation ───────────────────────────────────────────────
-# Streamlit reruns the script on every interaction, so we load persistent data
+# Streamlit reruns the script on every interaction, so we load persistent data 
 # from disk into session_state once per browser session to avoid repeated file reads.
-if "ratings" not in st.session_state:
-    st.session_state["ratings"] = load_json(RATINGS_FILE)
-if "recipe_cache" not in st.session_state:
-    st.session_state["recipe_cache"] = load_json(CACHE_FILE)
-if "profile" not in st.session_state:
-    st.session_state["profile"] = load_json(PROFILE_FILE)
+if "ratings" not in st.session_state: 
+    st.session_state["ratings"] = load_json(RATINGS_FILE) # load user's past star ratings from disk
+if "recipe_cache" not in st.session_state:  
+    st.session_state["recipe_cache"] = load_json(CACHE_FILE) # load recipes already fetched from Spoonacular (avoids re-fetching)
+if "profile" not in st.session_state:  
+    st.session_state["profile"] = load_json(PROFILE_FILE) # load the user's dietary preferences
 
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "logo.png") # If the file doesn't exist on disk, a text fallback is shown instead 
 
 # ── Page configuration ─────────────────────────────────────────────────────────
+# Sets the browser tab title, the small leaf icon next to it, and tells Streamlit to use the full width of the window
 st.set_page_config(
     page_title="Greendle",
     page_icon="🌿",
@@ -63,7 +69,9 @@ st.set_page_config(
 # ── Global CSS styling ─────────────────────────────────────────────────────────
 # Custom fonts and colours are injected via a <style> block to match the
 # Greendle brand identity (cream background, forest green accents, serif headings).
-st.markdown("""
+# st.markdown normally shows text, but with unsafe_allow_html=True we can also inject raw HTML 
+# The whole CSS is wrapped in triple quotes (""") so we can write it across many lines.
+st.markdown(""" 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,600;1,700&family=Dancing+Script:wght@600;700&family=Lato:wght@300;400;700&display=swap');
 
@@ -136,7 +144,8 @@ else:
         <span style="font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:700; color:#1A2D3D;">Greendle</span><span style="color:#3A6B3A; font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:700;">.</span>
     </div>
     """, unsafe_allow_html=True)
-st.sidebar.markdown("<div style='margin-bottom:1rem;'></div>", unsafe_allow_html=True)
+
+st.sidebar.markdown("<div style='margin-bottom:1rem;'></div>", unsafe_allow_html=True) # Empty div used purely as vertical spacing between the logo and the menu below.
 
 # _nav_target allows buttons on any page to programmatically switch the active page
 _pages = ["Home", "My Profile", "Find Recipes", "My Dashboard", "For You"]
@@ -144,15 +153,17 @@ _nav_index = _pages.index(st.session_state.pop("_nav_target", "Home"))
 page = st.sidebar.radio(
     "Navigate",
     _pages,
-    index=_nav_index,
-    label_visibility="collapsed"
+    index=_nav_index,   # which page should be selected when the sidebar loads.
+    label_visibility="collapsed" # hide the "Navigate" label since the options are self-explanatory
 )
 
 
 # ── Reusable UI helpers ────────────────────────────────────────────────────────
+# These are shortcut functions for HTML/CSS we'd otherwise have to copy-paste
+# everywhere. Defining them once keeps the page code shorter and easiert to read.
 
-# Render a styled section heading with a green underline accent.
 def section_heading(title):
+    """Render a styled section heading with a green underline accent."""
     st.markdown(f"""
     <div style="margin-bottom: 1.5rem;">
         <h2 style="font-family:'Playfair Display',serif; font-style:italic; font-weight:600;
@@ -162,8 +173,8 @@ def section_heading(title):
     """, unsafe_allow_html=True)
 
 
-# Wrap arbitrary HTML in a white rounded card with a subtle shadow.
 def card(content_html):
+    """Wrap arbitrary HTML in a white rounded card with a subtle shadow."""
     st.markdown(f"""
     <div style="background:white; border-radius:14px; padding:1.6rem;
                 box-shadow:0 2px 12px rgba(58,107,58,0.08); margin-bottom:1rem;
@@ -172,17 +183,21 @@ def card(content_html):
     </div>
     """, unsafe_allow_html=True)
 
+# ── Halal filtering ────────────────────────────────────────────────────────────────────
+# When the user checks "Halal" in their profile, we hide recipes containing non halal-products
 
-_NON_HALAL_KEYWORDS = {
+_NON_HALAL_KEYWORDS = { 
     "pork", "bacon", "ham", "lard", "prosciutto", "pancetta", "chorizo",
     "salami", "pepperoni", "wine", "beer", "ale", "rum", "vodka",
     "whiskey", "whisky", "brandy", "liqueur", "sake", "champagne",
     "gin", "tequila", "bourbon", "alcohol", "spirits",
-}
+} # This is a simple keyword matching approach
 
 def non_halal_label(recipe):
+    """ Return the HTML badge in red for any halal ingredient present in the recipe; return an empty 
+    string if there are no such ingredients."""
     names = [i.get("name", "").lower() for i in recipe.get("extendedIngredients", [])]
-    if any(kw in name for name in names for kw in _NON_HALAL_KEYWORDS):
+    if any(kw in name for name in names for kw in _NON_HALAL_KEYWORDS):  # Build a list of all ingredient names in lowercase, example: Pork =porc.
         return "<span style='color:#DC2626; font-size:0.85rem;'>🚫 Non-halal</span>"
     return ""
 
@@ -202,7 +217,7 @@ if page == "Home":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Problem and solution summary cards
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2) # creates two side-by-side regions of equal width.
     with col1:
         st.markdown("""
         <div style="background:white; border-radius:14px; padding:1.6rem;
@@ -250,7 +265,7 @@ if page == "Home":
          "Browse recipes picked just for you. The more you use it, the more it gets you. "
          "Like a friend who really, really knows your fridge."),
     ]
-    for col, title, desc in features:
+    for col, title, desc in features:  # Each iteration col, title, desc are unpacked from one tuple in featurs.
         with col:
             st.markdown(f"""
             <div style="background:white; border-radius:14px; padding:1.5rem;
@@ -272,15 +287,19 @@ if page == "Home":
 
 
 # ── Page: My Profile ───────────────────────────────────────────────────────────
+# Allows saving of user's diatary preferences. Streamlit has a strict rule: 
+# once you set a value for your widget it cannot be changed on the same run of the file. 
+# Below are several ways to get around this issue.
 elif page == "My Profile":
     section_heading("My Profile")
     st.markdown("<p style='color:#6B7280; margin-top:-1rem; margin-bottom:1.5rem;'>Tell us about your preferences so we can personalise your recipes.</p>", unsafe_allow_html=True)
 
-    # Load the currently saved profile so fields are pre-filled on revisit
+    # Load the currently saved profile so fields are pre-filled on revisit.
     p = st.session_state.get("profile", {})
 
-    # Handle "clear all restrictions" request: reset widget keys BEFORE widgets are
-    # rendered, because Streamlit forbids modifying a widget's key after instantiation.
+    # It’s impossible to set the values of those checkboxes after pressing “None of the above”  since Streamlit will refuse to do so after the elements are created. 
+    # The solution: when pressing this button, we put a flag which make us run the whole script again. 
+    # On the following script launch, before drawing the checkboxes, we check this flag, reset all the six checkboxes, then delete the flag with pop().
     restriction_keys = ["pref_vegan", "pref_vegetarian", "pref_gluten_free",
                         "pref_dairy_free", "pref_nut_free", "pref_halal"]
     if st.session_state.pop("do_clear", False):
@@ -298,13 +317,13 @@ elif page == "My Profile":
         "pref_nut_free":    p.get("nut_free", False),
         "pref_halal":       p.get("halal", False),
         "pref_spice":       p.get("spice_level", 2),
-        "pref_allergies":   ", ".join(p.get("allergies", [])),
+        "pref_allergies":   ", ".join(p.get("allergies", [])), # Allergies are saved as a listso we glue them back into one string because the widget is a text box.
     }
-    for k, v in defaults.items():
+    for k, v in defaults.items(): # this block runs on every rerun, but we only want to set the default the very first time. Without the guard, every click would overwrite the user's unsaved changes.
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Dietary restriction checkboxes — each tied to a session state key
+    # Dietary restriction checkboxes. Each tied to a session state key
     st.markdown("**Dietary Restrictions**")
     col1, col2 = st.columns(2)
     with col1:
@@ -316,7 +335,7 @@ elif page == "My Profile":
         st.checkbox("Nut-free",    key="pref_nut_free")
         st.checkbox("Halal",       key="pref_halal")
 
-    # Sets a flag so all checkboxes are reset at the top of the next rerun
+    # Sets a flag so all checkboxes are reset at the top of the next rerun.
     if st.button("None of the above — clear all restrictions"):
         st.session_state["do_clear"] = True
         st.rerun()
@@ -355,12 +374,12 @@ elif page == "Find Recipes":
     section_heading("Find Recipes")
     st.markdown("<p style='color:#6B7280; margin-top:-1rem; margin-bottom:1.5rem;'>Enter the ingredients you have and we'll find matching recipes.</p>", unsafe_allow_html=True)
 
-    ingredients_input = st.text_input(
+    ingredients_input = st.text_input( # Returns whatever the user types
         "Ingredients (comma-separated)",
         placeholder="e.g. chicken, garlic, lemon"
     )
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("Search Recipes"):
+    if st.button("Search Recipes"):  # Everything inside this if-block only runs on the click
         if not ingredients_input:
             st.warning("Please enter at least one ingredient.")
         else:
@@ -379,11 +398,14 @@ elif page == "Find Recipes":
             if profile.get("nut_free"):    intolerances.append("tree nut")
 
             try:
-                with st.spinner("Searching recipes..."):
+                with st.spinner("Searching recipes..."): # shows a loading indicator while the API call is running.
                     recipes = search_by_ingredients(
-                        ingredients, diet=diet, intolerances=intolerances or None
+                        ingredients, diet=diet, intolerances=intolerances or None # The API function expects either None or a non-empty list.
+
                     )
             except APIKeyMissingError:
+                # Triggered when .env is missing or the key is invalid.
+                # Show step-by-step setup instructions and halt the script.
                 st.error(
                     "**Spoonacular API key not configured.**\n\n"
                     "1. Get a free key at [spoonacular.com/food-api](https://spoonacular.com/food-api)\n"
@@ -393,10 +415,11 @@ elif page == "Find Recipes":
                 )
                 st.stop()
             except APIError as e:
+                # Any other API failure like quota exceeded, server down, etc
                 st.error(str(e))
                 st.stop()
 
-            if not recipes:
+            if not recipes: # If the list is empty, warn the user.
                 st.warning("No recipes found for those ingredients. Try something more common like chicken, garlic, or pasta.")
             else:
                 ratings = st.session_state.get("ratings", {})
@@ -410,21 +433,24 @@ elif page == "Find Recipes":
                     full_recipes = []
                     recipe_cache = st.session_state["recipe_cache"]
                     for r in ranked:
-                        rid = str(r["id"])
+                        rid = str(r["id"]) # use string IDs because JSON keys must be strings.
                         if rid not in recipe_cache:
-                            full = get_recipe_by_id(r["id"])
+                            full = get_recipe_by_id(r["id"]) # If the detail call returned nothing, keep the partial recipe so the user still sees something.
                             recipe_cache[rid] = full if full else r
                         full_recipes.append(recipe_cache[rid])
                     st.session_state["recipe_cache"] = recipe_cache
                     save_json(CACHE_FILE, recipe_cache)  # persist to disk
 
-                if st.session_state.get("profile", {}).get("halal"):
+                # Halal filter: if the user checked Halal in their profil,
+                # drop any recipe whose ingredients contain a forbidden keyword.
+                if st.session_state.get("profile", {}).get("halal"): 
                     full_recipes = [r for r in full_recipes if not non_halal_label(r)]
 
                 st.session_state["search_results"] = full_recipes
                 st.session_state["search_ingredients"] = ingredients
 
-    # Display results — persisted in session_state so they survive re-renders
+    # This block sits outside the Search button if-statement on purpose: it
+    # runs on every rerun, so results stay visible after clicks like Save Rating.
     if "search_results" in st.session_state:
         results = st.session_state["search_results"]
 
@@ -433,7 +459,8 @@ elif page == "Find Recipes":
                 return True
             analyzed = r.get("analyzedInstructions", [])
             return any(s for section in analyzed for s in section.get("steps", []))
-
+         
+        # Filter out recipes with no instructions as they're not cookable.
         results = [r for r in results if has_instructions(r)]
         st.markdown(f"<p style='color:#3A6B3A; font-weight:600; margin-bottom:1rem;'>Found {len(results)} recipes</p>", unsafe_allow_html=True)
 
@@ -445,18 +472,19 @@ elif page == "Find Recipes":
                     st.image(recipe["image"], width=150)
             with col2:
                 st.markdown(f"<div style='font-size:1.1rem; font-weight:700; color:#1A2D3D; margin-bottom:0.25rem;'>{recipe['title']}</div>", unsafe_allow_html=True)
-                ready_in = recipe.get("readyInMinutes", "?")
+                ready_in = recipe.get("readyInMinutes", "?")  # Cooking time + servings
                 servings = recipe.get("servings", "?")
                 st.markdown(f"<span style='color:#6B7280; font-size:0.88rem;'>⏱ {ready_in} min &nbsp;·&nbsp; 🍽 {servings} servings</span>", unsafe_allow_html=True)
                 diets = recipe.get("diets", [])
                 if diets:
-                    st.markdown(f"<span style='color:#3A6B3A; font-size:0.85rem;'>🥗 {', '.join(d.capitalize() for d in diets[:3])}</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span style='color:#3A6B3A; font-size:0.85rem;'>🥗 {', '.join(d.capitalize() for d in diets[:3])}</span>", unsafe_allow_html=True) # diets[:3] = take the first 3 only (Spoonacular sometimes returns 10+)
                 label = non_halal_label(recipe)
                 if label:
                     st.markdown(label, unsafe_allow_html=True)
 
             # Full recipe details in a collapsible expander
             with st.expander("View full recipe"):
+                # Ingredients as a bulleted list.
                 st.markdown("**Ingredients**")
                 for ing in recipe.get("extendedIngredients", []):
                     st.markdown(f"- {ing.get('original', '')}")
@@ -470,12 +498,14 @@ elif page == "Find Recipes":
                 st.markdown(instructions, unsafe_allow_html=True)
 
                 st.markdown("---")
-                # Rating widget — saved to disk so it influences future ML rankings
+                # Each recipe needs its own session_state slot for its slider.
+                # The f-string make each key unique by injecting the recipe ID.
+                # Without unique keys, all sliders would collide and Streamlit would crash.
                 rating_key = f"rating_{recipe['id']}"
                 rating = st.slider("Rate this recipe ⭐", 1, 5, 3, key=rating_key)
                 if st.button("Save Rating", key=f"save_{recipe['id']}"):
                     st.session_state["ratings"][str(recipe["id"])] = rating
-                    save_json(RATINGS_FILE, st.session_state["ratings"])
+                    save_json(RATINGS_FILE, st.session_state["ratings"]) # This rating will boost similar recipes on the user's next search.
                     st.success("Rating saved!")
 
             st.markdown("<hr style='border:none; border-top:1px solid #E5E7EB; margin:0.5rem 0;'>", unsafe_allow_html=True)
