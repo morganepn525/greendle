@@ -202,6 +202,32 @@ def non_halal_label(recipe):
     return ""
 
 
+_KEEP_UNITS = {"tsp", "tsps", "teaspoon", "teaspoons", "tbsp", "tbsps", "tablespoon", "tablespoons"}
+
+# Format an ingredient using metric units, keeping tsp and tbsp as-is.
+def format_ingredient_metric(ing):
+    original = ing.get("original", "")
+    us = ing.get("measures", {}).get("us", {})
+    us_unit = (us.get("unitShort") or us.get("unitLong") or "").lower().strip()
+
+    if us_unit in _KEEP_UNITS:
+        return original
+
+    metric = ing.get("measures", {}).get("metric", {})
+    m_amount = metric.get("amount")
+    m_unit = (metric.get("unitShort") or metric.get("unitLong") or "").strip()
+    name = ing.get("name", "")
+
+    if m_amount and m_unit and name:
+        if float(m_amount) == int(float(m_amount)):
+            amount_str = str(int(float(m_amount)))
+        else:
+            amount_str = f"{float(m_amount):.1f}"
+        return f"{amount_str} {m_unit} {name}"
+
+    return original
+
+
 # ── Page: Home ─────────────────────────────────────────────────────────────────
 if page == "Home":
     # Hero title
@@ -487,7 +513,7 @@ elif page == "Find Recipes":
                 # Ingredients as a bulleted list.
                 st.markdown("**Ingredients**")
                 for ing in recipe.get("extendedIngredients", []):
-                    st.markdown(f"- {ing.get('original', '')}")
+                    st.markdown(f"- {format_ingredient_metric(ing)}")
 
                 st.markdown("**Instructions**")
                 instructions = (recipe.get("instructions") or "").strip()
