@@ -204,12 +204,22 @@ def non_halal_label(recipe):
 
 
 # Convert all Fahrenheit temperatures in a text string to Celsius.
+# Handles formats: 400F, 350 F, 375 degrees F, 130°F, 425/F, and ranges like 400-450 F.
 def convert_f_to_c(text):
-    pattern = r'(\d+(?:\.\d+)?)\s*(?:°\s*[Ff]|[Ff]ahrenheit|degrees?\s+[Ff](?:ahrenheit)?)\b'
-    def replacer(match):
+    # Handle ranges first, e.g. "400-450 F" → "204-232°C"
+    range_pattern = r'(\d+)-(\d+)\s*(?:°\s*|degrees?\s+)?[Ff](?:ahrenheit)?\b'
+    def range_replacer(match):
+        c1 = round((float(match.group(1)) - 32) * 5 / 9)
+        c2 = round((float(match.group(2)) - 32) * 5 / 9)
+        return f"{c1}-{c2}°C"
+    text = re.sub(range_pattern, range_replacer, text)
+
+    # Handle single temperatures, e.g. "400F", "350 F", "375 degrees F", "130°F", "425/F"
+    single_pattern = r'(\d+(?:\.\d+)?)\s*(?:°\s*|degrees?\s+|\/)?[Ff](?:ahrenheit)?\b'
+    def single_replacer(match):
         c = round((float(match.group(1)) - 32) * 5 / 9)
         return f"{c}°C"
-    return re.sub(pattern, replacer, text)
+    return re.sub(single_pattern, single_replacer, text)
 
 
 _KEEP_UNITS = {"tsp", "tsps", "teaspoon", "teaspoons", "tbsp", "tbsps", "tablespoon", "tablespoons"}
