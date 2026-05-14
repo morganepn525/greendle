@@ -16,7 +16,7 @@ API_KEY = os.getenv("SPOONACULAR_KEY")
 BASE_URL = "https://api.spoonacular.com/recipes"
 
 
-# --- Custom Error Messages ---
+# Custom Error Messages
 # These are special error types we create ourselves.
 # When something goes wrong, we can tell the user exactly what happened.
 
@@ -29,7 +29,7 @@ class APIError(Exception):
     pass
 
 
-# --- Helper Function ---
+#  Helper Function 
 # This function checks if the API response is okay.
 # We use it in every request so we don't have to repeat the same checks.
 
@@ -53,7 +53,7 @@ def _check_response(response):
     return response.json()
 
 
-# --- Search Function ---
+# Search Function
 # This function searches for recipes based on ingredients the user has at home.
 # For example: ingredients = ["tomato", "cheese", "egg"]
 
@@ -94,7 +94,7 @@ def search_by_ingredients(ingredients, number=8, diet=None, intolerances=None):
     return results
 
 
-# --- Get Single Recipe Function ---
+# Get Single Recipe Function
 # This function gets all the details for one specific recipe.
 # We need the recipe ID number to find it (every recipe has a unique ID).
 
