@@ -24,7 +24,7 @@ from recommender import rank_recipes
 from nutriscore import load_nutrition_db, load_nova_db, recipe_nutriscore, LETTER_COLOR, LETTER_LABEL # We use it on the dashboard to show a score from A to E.
 
 # ── File paths for persistent storage───────────────────────────────────────────────
-# Data is stored as JSON files so it survives browser refreshes and app restarts.
+# Data is stored as JSON files so it survive browser refreshes and app restarts.
 # os.path.dirname(__file__) returns the folder this app.py lives in, so paths work no matter where the app is launched from.
 RATINGS_FILE = os.path.join(os.path.dirname(__file__), "data", "ratings.json")
 CACHE_FILE   = os.path.join(os.path.dirname(__file__), "data", "recipe_cache.json")
@@ -561,32 +561,35 @@ elif page == "Find Recipes":
 
 
 # ── Page: My Dashboard ─────────────────────────────────────────────────────────
+# Shows the user a health score for every recipes they've rated.
 elif page == "My Dashboard":
     section_heading("My Health Dashboard")
     st.markdown("<p style='color:#6B7280; margin-top:-1rem; margin-bottom:1.5rem;'>The Greendle Score cuts through diet culture : it's a rating out of 10 that tells you what your body actually thrives on, not what shrinks your waistline. By combining the nutritional quality of your ingredients with how processed they are, it gives you a honest picture of how well a meal truly fuels, repairs, and energizes your body from the inside out.</p>", unsafe_allow_html=True)
 
     ratings      = st.session_state.get("ratings", {})
-    results      = st.session_state.get("search_results", [])
-    recipe_cache = st.session_state.get("recipe_cache", {})
+    results      = st.session_state.get("search_results", []) # most recent search
+    recipe_cache = st.session_state.get("recipe_cache", {}) # all ever-fetched recipes
 
-    if not ratings:
+    if not ratings: # Nothing to show until the user has rated at least one recipe.
         st.markdown('<div style="background:white;border-radius:16px;padding:1.5rem;box-shadow:0 2px 10px rgba(0,0,0,0.06);text-align:center;color:#6B7280;">Your stats will appear here once you rate some recipes.</div>', unsafe_allow_html=True)
     else:
         # Load nutrition databases (cached by Streamlit after first load)
-        with st.spinner("Loading nutrition database…"):
+        with st.spinner("Loading nutrition database…"): # gives nutritional values per ingredient
             nutrition_db = load_nutrition_db()
             nova_db      = load_nova_db()
 
-        # Merge search results and persistent cache so rated recipes are always found
+        # A rated recipe may be in search_results (just searched) or only in
+        # recipe_cache (rated in a past session). Merging both ensures we can
+        # find every rated recipe regardless of when it was rated.
         recipe_lookup = {str(r["id"]): r for r in results}
         recipe_lookup.update(recipe_cache)
 
-        # Compute Greendle Health Score for each rated recipe
+        # Compute Greendle Health Score for each rated recipe.
         labels, letters, grades = [], [], []
         for recipe_id in ratings:
             recipe = recipe_lookup.get(recipe_id)
             if not recipe:
-                continue
+                continue # recipe not found in cache, skip rather than crash.
             # recipe_nutriscore returns a letter (A-E) and a numeric score (1-10)
             letter, grade = recipe_nutriscore(recipe, nutrition_db, nova_db)
             short_title = recipe["title"][:25] + ("…" if len(recipe["title"]) > 25 else "")
@@ -594,11 +597,11 @@ elif page == "My Dashboard":
             letters.append(letter)
             grades.append(grade)
 
-        if not labels:
+        if not labels: # ratings exist but none of the recipes were found in the cache.
             st.info("Recipe details not found in cache — try searching for a recipe first.")
         else:
             total_meals   = len(labels)
-            overall_score = round(sum(grades) / len(grades), 1)
+            overall_score = round(sum(grades) / len(grades), 1) # Average score across all rated recipes, rounded to 1 decimal
 
             # Map overall numeric score to letter grade for the summary card
             if overall_score >= 8.0:   overall_letter = "A"
@@ -610,6 +613,9 @@ elif page == "My Dashboard":
             score_color = LETTER_COLOR[overall_letter]
 
             # Summary metrics row
+            # Two side-by-side cards. Left uses st.metric (simple built-in widget).
+            # Right uses custom HTML because we need the score coloured by grade.
+
             c1, c2 = st.columns(2)
             c1.metric("Meals cooked", total_meals)
             with c2:
@@ -617,19 +623,19 @@ elif page == "My Dashboard":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Bar chart: one bar per rated recipe, coloured by health letter grade
+            # One bar per rated recipe. Each bar is coloured by its letter grade
             fig = go.Figure(go.Bar(
-                x=labels, y=grades,
+                x=labels, y=grades,  # recipe titles on x, scores on y
                 marker_color=[LETTER_COLOR[l] for l in letters],
-                marker_line_width=0,
-                text=[str(g) for g in grades], textposition="outside",
+                marker_line_width=0, # no border around bars
+                text=[str(g) for g in grades], textposition="outside", # score label shown above each bar
                 textfont=dict(color="#1A2D3D", size=13),
             ))
             fig.update_layout(
                 plot_bgcolor="white", paper_bgcolor="white",
                 font=dict(family="Inter, sans-serif", color="#1A2D3D"),
-                yaxis=dict(title="Greendle Score (/ 10)", range=[0, 12], gridcolor="#F0F0F0", zeroline=False),
-                xaxis=dict(title="Recipe", tickangle=-20),
+                yaxis=dict(title="Greendle Score (/ 10)", range=[0, 12], gridcolor="#F0F0F0", zeroline=False), # range goes to 12 so labels above bars don't clip
+                xaxis=dict(title="Recipe", tickangle=-20),   # tilt labels so long titles don't overlap
                 margin=dict(t=20, b=60, l=40, r=20), height=380,
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -637,14 +643,18 @@ elif page == "My Dashboard":
 
 
 # ── Page: For You ──────────────────────────────────────────────────────────────
-elif page == "For You":
+# Personalised recipe recommendations built from the user's rating history.
+# Extract ingredients from top-3 rated recipes → use as a taste profile
+# → search Spoonacular with those ingredients → rank with ML → display results.
+# Recommendations are cached and only recomputed when ratings change.
+elif page == "For You": 
     section_heading("For You")
     st.markdown("<p style='color:#6B7280; margin-top:-1rem; margin-bottom:1.5rem;'>Personalised suggestions based on your taste profile, built from your star ratings.</p>", unsafe_allow_html=True)
 
     ratings      = st.session_state.get("ratings", {})
     recipe_cache = st.session_state.get("recipe_cache", {})
 
-    if not ratings:
+    if not ratings: # Can't recommend anything without at least one rating to learn from.
         # Prompt the user to rate recipes before recommendations can be generated
         st.markdown('<div style="background:white;border-radius:16px;padding:2rem;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.06);"><div style="font-size:2.5rem;margin-bottom:0.6rem;">⭐</div><div style="font-weight:700;color:#1A2D3D;font-size:1.05rem;margin-bottom:0.4rem;">No ratings yet</div><div style="color:#6B7280;font-size:0.9rem;line-height:1.6;">Head to <strong>Find Recipes</strong>, cook something, and rate it — we\'ll use those stars to find what you\'ll love next.</div></div>', unsafe_allow_html=True)
     else:
@@ -655,7 +665,7 @@ elif page == "For You":
             recipe = recipe_cache.get(rid, {})
             for ing in recipe.get("extendedIngredients", []):
                 name = ing.get("name", "").strip().lower()
-                # Avoid duplicates in the seed list
+                 # Skip empty names and duplicates
                 if name and name not in seed_ingredients:
                     seed_ingredients.append(name)
 
@@ -670,12 +680,13 @@ elif page == "For You":
             ratings_key = hash(frozenset(ratings.items()))
             if st.session_state.get("_recs_key") != ratings_key:
                 with st.spinner("Finding recipes you'll love..."):
-                    # Search the API using the taste-profile ingredients
+                    # Search the API (Spoonacular) using the taste-profile ingredients
                     candidates = search_by_ingredients(seed_ingredients, number=8)
                 if candidates:
                     # Re-rank candidates using the same ML model (TF-IDF + rating boost)
                     ranked = rank_recipes(candidates, seed_ingredients, ratings)
                     with st.spinner("Loading details..."):
+                        # Same fetch-and-cache loop as Find Recipes.
                         full = []
                         for r in ranked:
                             ckey = str(r["id"])
@@ -684,7 +695,7 @@ elif page == "For You":
                                 recipe_cache[ckey] = fetched if fetched else r
                                 save_json(CACHE_FILE, recipe_cache)
                             full.append(recipe_cache[ckey])
-                    if st.session_state.get("profile", {}).get("halal"):
+                    if st.session_state.get("profile", {}).get("halal"): # Drop non-halal recipes if the profile says so.
                         full = [r for r in full if not non_halal_label(r)]
                     st.session_state["_recs"]     = full
                     st.session_state["_recs_key"] = ratings_key
