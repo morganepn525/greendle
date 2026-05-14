@@ -14,6 +14,7 @@
 #Imports:
 import json # let us save Python data into text files and read it back later.
 import os # build file paths in a way that works on Windows, Mac and Linux.
+import re # lets us search and replace patterns in text, used to convert °F to °C in instructions.
 import streamlit as st # "as st" gives streamlit the nickname st, so we can write st.button(...) instead of streamlit.button(...)
 import plotly.graph_objects as go # same: go = plotly.graph_objects, used to draw the bar chart on the dashboard.
 
@@ -200,6 +201,15 @@ def non_halal_label(recipe):
     if any(kw in name for name in names for kw in _NON_HALAL_KEYWORDS):  # Build a list of all ingredient names in lowercase, example: Pork =porc.
         return "<span style='color:#DC2626; font-size:0.85rem;'>🚫 Non-halal</span>"
     return ""
+
+
+# Convert all Fahrenheit temperatures in a text string to Celsius.
+def convert_f_to_c(text):
+    pattern = r'(\d+(?:\.\d+)?)\s*(?:°\s*[Ff]|[Ff]ahrenheit|degrees?\s+[Ff](?:ahrenheit)?)\b'
+    def replacer(match):
+        c = round((float(match.group(1)) - 32) * 5 / 9)
+        return f"{c}°C"
+    return re.sub(pattern, replacer, text)
 
 
 _KEEP_UNITS = {"tsp", "tsps", "teaspoon", "teaspoons", "tbsp", "tbsps", "tablespoon", "tablespoons"}
@@ -521,7 +531,7 @@ elif page == "Find Recipes":
                     analyzed = recipe.get("analyzedInstructions", [])
                     steps = [s for section in analyzed for s in section.get("steps", [])]
                     instructions = "\n\n".join(f"**{s['number']}.** {s['step']}" for s in steps)
-                st.markdown(instructions, unsafe_allow_html=True)
+                st.markdown(convert_f_to_c(instructions), unsafe_allow_html=True)
 
                 st.markdown("---")
                 # Each recipe needs its own session_state slot for its slider.
