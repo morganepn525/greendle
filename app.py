@@ -21,7 +21,7 @@ import plotly.graph_objects as go # used to draw the bar chart on the dashboard.
 # Internal project modules:
 from api import search_by_ingredients, get_recipe_by_id, APIKeyMissingError, APIError # We borrow the two search functions and two error types so we can show a nice message instead of a crash when something goes wrong.
 from recommender import rank_recipes
-from nutriscore import load_nutrition_db, load_nova_db, recipe_nutriscore, LETTER_COLOR, LETTER_LABEL # We use it on the dashboard to show a score from A to E.
+from nutriscore import load_nutrition_db, load_nova_db, recipe_nutriscore # We use it on the dashboard to compute the Greendle Health Score.
 
 # ── File paths for persistent storage───────────────────────────────────────────────
 # Data is stored as JSON files so it survive browser refreshes and app restarts.
@@ -197,6 +197,15 @@ def non_halal_label(recipe):
     if any(kw in name for name in names for kw in _NON_HALAL_KEYWORDS):  # Build a list of all ingredient names in lowercase, example: Pork =porc.
         return "<span style='color:#DC2626; font-size:0.85rem;'>🚫 Non-halal</span>"
     return ""
+
+
+# Map a Greendle score (1–10) to a colour for charts and highlights.
+def score_to_color(s):
+    if s >= 8.0: return "#038141"
+    if s >= 6.0: return "#85BB2F"
+    if s >= 4.0: return "#FECB02"
+    if s >= 2.0: return "#EE8100"
+    return "#E63312"
 
 
 # Round a number to the nearest multiple of 5.
@@ -579,17 +588,15 @@ elif page == "My Dashboard":
         recipe_lookup = {str(r["id"]): r for r in results}
         recipe_lookup.update(recipe_cache)
 
-        # Compute Greendle Health Score for each rated recipe.
-        labels, letters, grades = [], [], []
+        # Compute Greendle Health Score for each rated recipe
+        labels, grades = [], []
         for recipe_id in ratings:
             recipe = recipe_lookup.get(recipe_id)
             if not recipe:
                 continue # recipe not found in cache, skip rather than crash.
-            # recipe_nutriscore returns a letter (A-E) and a numeric score (1-10)
-            letter, grade = recipe_nutriscore(recipe, nutrition_db, nova_db)
+            grade = recipe_nutriscore(recipe, nutrition_db, nova_db)
             short_title = recipe["title"][:25] + ("…" if len(recipe["title"]) > 25 else "")
             labels.append(short_title)
-            letters.append(letter)
             grades.append(grade)
 
         if not labels: # ratings exist but none of the recipes were found in the cache.
@@ -598,15 +605,6 @@ elif page == "My Dashboard":
             total_meals   = len(labels)
             overall_score = round(sum(grades) / len(grades), 1) # Average score across all rated recipes, rounded to 1 decimal
 
-            # Map overall numeric score to letter grade for the summary card
-            if overall_score >= 8.0:   overall_letter = "A"
-            elif overall_score >= 6.0: overall_letter = "B"
-            elif overall_score >= 4.0: overall_letter = "C"
-            elif overall_score >= 2.0: overall_letter = "D"
-            else:                      overall_letter = "E"
-
-            score_color = LETTER_COLOR[overall_letter]
-
             # Summary metrics row
             # Two side-by-side cards. Left uses st.metric (simple built-in widget).
             # Right uses custom HTML because we need the score coloured by grade.
@@ -614,16 +612,16 @@ elif page == "My Dashboard":
             c1, c2 = st.columns(2)
             c1.metric("Meals cooked", total_meals)
             with c2:
-                st.markdown(f'<div style="background:white;border-radius:14px;padding:1.2rem 1.5rem;border:1px solid #E5E7EB;"><div style="font-size:0.85rem;color:#6B7280;margin-bottom:0.4rem;">Greendle Health Score</div><div style="display:flex;align-items:baseline;gap:0.3rem;"><span style="font-size:2rem;font-weight:800;color:{score_color};">{overall_score}</span><span style="font-size:1rem;color:#9CA3AF;">&thinsp;/ 10</span></div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background:white;border-radius:14px;padding:1.2rem 1.5rem;border:1px solid #E5E7EB;"><div style="font-size:0.85rem;color:#6B7280;margin-bottom:0.4rem;">Greendle Health Score</div><div style="display:flex;align-items:baseline;gap:0.3rem;"><span style="font-size:2rem;font-weight:800;color:{score_to_color(overall_score)};">{overall_score}</span><span style="font-size:1rem;color:#9CA3AF;">&thinsp;/ 10</span></div></div>', unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # One bar per rated recipe. Each bar is coloured by its letter grade
+            # Bar chart: one bar per rated recipe, coloured by score
             fig = go.Figure(go.Bar(
-                x=labels, y=grades,  # recipe titles on x, scores on y
-                marker_color=[LETTER_COLOR[l] for l in letters],
-                marker_line_width=0, # no border around bars
-                text=[str(g) for g in grades], textposition="outside", # score label shown above each bar
+                x=labels, y=grades,
+                marker_color=[score_to_color(g) for g in grades],
+                marker_line_width=0,
+                text=[str(g) for g in grades], textposition="outside",
                 textfont=dict(color="#1A2D3D", size=13),
             ))
             fig.update_layout(

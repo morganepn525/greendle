@@ -190,21 +190,6 @@ _NUTRI_WEIGHTS = {
     "carbs":    0.05,
 }
 
-LETTER_COLOR = {
-    "A": "#038141",
-    "B": "#85BB2F",
-    "C": "#FECB02",
-    "D": "#EE8100",
-    "E": "#E63312",
-}
-
-LETTER_LABEL = {
-    "A": "Excellent",
-    "B": "Good",
-    "C": "Average",
-    "D": "Poor",
-    "E": "Bad",
-}
 
 # ── Cooking-method penalties ─────────────────────────────────────────────────
 COOKING_PENALTIES = {
@@ -546,7 +531,7 @@ def _nutri_score_0_100(calories, fat_g, sat_fat_g, sugar_g, sodium_g,
 
 
 # Compute the Greendle Health Score for a recipe.
-# Returns (letter, score) where letter is A–E and score is 1.0–10.0.
+# Returns a score from 1.0 to 10.0.
 # Formula: greendle_raw = nutri_0_100 × 0.60 + nova_0_100 × 0.40
 #   score_1_10 = 1 + (greendle_raw / 100) × 9  → rounded to 1 dp
 #   nova_0_100 = 100 × (1 – avg_penalty / 30)  where avg_penalty is gram-weighted across all ingredients (0–30).
@@ -594,10 +579,4 @@ def recipe_nutriscore(recipe, nutrition_db, nova_db=None):
     score        = round(1.0 + (greendle_raw / 100.0) * 9.0, 1)
     score        = max(1.0, min(10.0, score))
 
-    if score >= 8.0:   letter = "A"
-    elif score >= 6.0: letter = "B"
-    elif score >= 4.0: letter = "C"
-    elif score >= 2.0: letter = "D"
-    else:              letter = "E"
-
-    return letter, score
+    return score
