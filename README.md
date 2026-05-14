@@ -1,6 +1,6 @@
 # Greendle
 
-Greendle is a smart meal planning web app built with Python and Streamlit. The idea is simple: instead of going to the store and buying ingredients for a specific recipe, you start with what you already have at home and find something good to cook with it. This helps reduce food waste, which is a bigger problem than most people realise -- the average household throws away about 30% of the food it buys.
+Greendle is a smart meal planning web app built with Python and Streamlit. The idea is simple: instead of going to the store and buying ingredients for a specific recipe, you start with what you already have at home and find something good to cook with it. This helps reduce food waste, which is a bigger problem than most people realise: the average household throws away about 30% of the food it buys.
 
 ---
 
@@ -66,7 +66,6 @@ Parts of this project were developed with the assistance of **Claude Code by Ant
 - Writing and debugging Python code across all modules
 - Designing the structure of the recommendation algorithm
 - Styling the user interface with CSS
-- Writing source code comments and documentation
 
 All AI-generated code was reviewed, tested, and adapted by the team. The overall concept, problem framing, and project decisions were made by the team independently.
 
@@ -74,4 +73,4 @@ All AI-generated code was reviewed, tested, and adapted by the team. The overall
 
 ## Team
 
-University of St. Gallen -- Grundlagen und Methoden der Informatik, Group Project, Spring 2026
+University of St. Gallen - Grundlagen und Methoden der Informatik, Group Project, Spring 2026
