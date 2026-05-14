@@ -12,11 +12,11 @@
 #   For You      — personalised recommendations driven by past ratings
 
 #Imports:
-import json # let us save Python data into text files and read it back later.
-import os # build file paths in a way that works on Windows, Mac and Linux.
+import json 
+import os 
 import re # lets us search and replace patterns in text, used to convert °F to °C in instructions.
-import streamlit as st # "as st" gives streamlit the nickname st, so we can write st.button(...) instead of streamlit.button(...)
-import plotly.graph_objects as go # same: go = plotly.graph_objects, used to draw the bar chart on the dashboard.
+import streamlit as st 
+import plotly.graph_objects as go # used to draw the bar chart on the dashboard.
 
 # Internal project modules:
 from api import search_by_ingredients, get_recipe_by_id, APIKeyMissingError, APIError # We borrow the two search functions and two error types so we can show a nice message instead of a crash when something goes wrong.
@@ -25,7 +25,6 @@ from nutriscore import load_nutrition_db, load_nova_db, recipe_nutriscore, LETTE
 
 # ── File paths for persistent storage───────────────────────────────────────────────
 # Data is stored as JSON files so it survive browser refreshes and app restarts.
-# os.path.dirname(__file__) returns the folder this app.py lives in, so paths work no matter where the app is launched from.
 RATINGS_FILE = os.path.join(os.path.dirname(__file__), "data", "ratings.json")
 CACHE_FILE   = os.path.join(os.path.dirname(__file__), "data", "recipe_cache.json")
 PROFILE_FILE = os.path.join(os.path.dirname(__file__), "data", "profile.json")
@@ -36,7 +35,7 @@ def load_json(path):
     """Load a JSON file and return its contents, or an empty dict if missing/corrupt."""
     try:
         with open(path) as f:
-            return json.load(f)  # json.load reads the text and converts it back into a Python dict.
+            return json.load(f) 
     except (FileNotFoundError, json.JSONDecodeError):
         return {} # Return an empty dict so the app can keep running as if no data was saved.
 
@@ -48,8 +47,7 @@ def save_json(path, data):
 
 
 # ── Session state initialisation ───────────────────────────────────────────────
-# Streamlit reruns the script on every interaction, so we load persistent data 
-# from disk into session_state once per browser session to avoid repeated file reads.
+# Streamlit reruns the script on every interaction, so we load persistent data.
 if "ratings" not in st.session_state: 
     st.session_state["ratings"] = load_json(RATINGS_FILE) # load user's past star ratings from disk
 if "recipe_cache" not in st.session_state:  
@@ -68,10 +66,8 @@ st.set_page_config(
 )
 
 # ── Global CSS styling ─────────────────────────────────────────────────────────
-# Custom fonts and colours are injected via a <style> block to match the
+# Custom fonts and colours are injected via a style block to match the
 # Greendle brand identity (cream background, forest green accents, serif headings).
-# st.markdown normally shows text, but with unsafe_allow_html=True we can also inject raw HTML 
-# The whole CSS is wrapped in triple quotes (""") so we can write it across many lines.
 st.markdown(""" 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,600;1,700&family=Dancing+Script:wght@600;700&family=Lato:wght@300;400;700&display=swap');
@@ -148,7 +144,7 @@ else:
 
 st.sidebar.markdown("<div style='margin-bottom:1rem;'></div>", unsafe_allow_html=True) # Empty div used purely as vertical spacing between the logo and the menu below.
 
-# _nav_target allows buttons on any page to programmatically switch the active page
+# Allow programmatic page navigation.
 _pages = ["Home", "My Profile", "Find Recipes", "My Dashboard", "For You"]
 _nav_index = _pages.index(st.session_state.pop("_nav_target", "Home"))
 page = st.sidebar.radio(
@@ -185,14 +181,14 @@ def card(content_html):
     """, unsafe_allow_html=True)
 
 # ── Halal filtering ────────────────────────────────────────────────────────────────────
-# When the user checks "Halal" in their profile, we hide recipes containing non halal-products
+# When the user checks "Halal" in their profile, we hide recipes containing non halal-products.
 
 _NON_HALAL_KEYWORDS = { 
     "pork", "bacon", "ham", "lard", "prosciutto", "pancetta", "chorizo",
     "salami", "pepperoni", "wine", "beer", "ale", "rum", "vodka",
     "whiskey", "whisky", "brandy", "liqueur", "sake", "champagne",
     "gin", "tequila", "bourbon", "alcohol", "spirits",
-} # This is a simple keyword matching approach
+} # Non-halal ingredients
 
 def non_halal_label(recipe):
     """ Return the HTML badge in red for any halal ingredient present in the recipe; return an empty 
@@ -336,8 +332,7 @@ if page == "Home":
 
 
 # ── Page: My Profile ───────────────────────────────────────────────────────────
-# Allows saving of user's diatary preferences. Streamlit has a strict rule: 
-# once you set a value for your widget it cannot be changed on the same run of the file. 
+# Allows saving of user's diatary preferences. Streamlit widgets can't be mutated after creation.
 # Below are several ways to get around this issue.
 elif page == "My Profile":
     section_heading("My Profile")
